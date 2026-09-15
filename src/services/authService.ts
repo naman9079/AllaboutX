@@ -1,4 +1,5 @@
 import { env } from '../lib/env'
+import { supabase } from '../lib/supabase'
 
 export type AuthUser = { id: string; email: string; name: string; xUsername?: string; profileImageUrl?: string | null }
 
@@ -10,8 +11,36 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const authService = {
-  me: () => request<AuthUser>('/api/auth/me'),
-  login: (email: string, password: string) => request<AuthUser>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (name: string, email: string, password: string) => request<AuthUser>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
-  logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+  me: async () => {
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) throw new Error('Not signed in to Supabase')
+    try {
+      return await request<AuthUser>('/api/auth/me')
+    } catch {
+      return { id: user.id, email: user.email || '', name: user.user_metadata?.name || 'User' }
+    }
+  },
+  login: async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw new Error(error.message)
+    return request<AuthUser>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+  },
+  register: async (name: string, email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
+    if (error) throw new Error(error.message)
+    return request<AuthUser>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) })
+  },
+  sendOtp: async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ email })
+    if (error) throw new Error(error.message)
+  },
+  verifyOtp: async (email: string, token: string) => {
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+    if (error || !data.user) throw new Error(error?.message || 'Failed to verify OTP')
+    return { id: data.user.id, email: data.user.email || '', name: data.user.user_metadata?.name || 'User' }
+  },
+  logout: async () => {
+    await supabase.auth.signOut()
+    return request<void>('/api/auth/logout', { method: 'POST' }).catch(() => {})
+  },
 }
