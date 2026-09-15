@@ -109,7 +109,7 @@ app.get('/api/auth/x/callback', async (request, response) => {
   data.oauthStates = (data.oauthStates || []).filter(item => item.state !== state)
   if (!code || !oauthState) return response.redirect(`${webUrl}/?auth_error=Invalid%20X%20login%20session`)
   const redirectUri = process.env.X_REDIRECT_URI || 'http://localhost:8787/api/auth/x/callback'
-  const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code, grant_type: 'authorization_code', client_id: process.env.X_CLIENT_ID, redirect_uri: redirectUri, code_verifier: oauthState.verifier }) })
+  const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ code, grant_type: 'authorization_code', client_id: process.env.X_CLIENT_ID, client_secret: process.env.X_CLIENT_SECRET, redirect_uri: redirectUri, code_verifier: oauthState.verifier }) })
   const tokens = await tokenResponse.json()
   if (!tokenResponse.ok || !tokens.access_token) { await writeData(data); return response.redirect(`${webUrl}/?auth_error=Unable%20to%20complete%20X%20login`) }
   const profileResponse = await fetch('https://api.x.com/2/users/me?user.fields=profile_image_url,username,name', { headers: { Authorization: `Bearer ${tokens.access_token}` } })
