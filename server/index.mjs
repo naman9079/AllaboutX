@@ -45,6 +45,16 @@ function cookies(request) { return Object.fromEntries((request.headers.cookie ||
 async function authenticatedUser(request) { const data = await readData(); const token = cookies(request).allaboutx_session; const session = data.sessions.find(item => item.token === token && new Date(item.expiresAt) > new Date()); return session ? { data, user: data.users.find(item => item.id === session.userId) } : { data, user: null } }
 function base64Url(value) { return value.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') }
 function xRedirect(path) { return `${webUrl}${path}` }
+async function refreshXAccessToken(user, data) {
+  if (!user.xRefreshToken) return null
+  const response = await fetch('https://api.x.com/2/oauth2/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ refresh_token: user.xRefreshToken, grant_type: 'refresh_token', client_id: process.env.X_CLIENT_ID, client_secret: process.env.X_CLIENT_SECRET }) })
+  const tokens = await response.json().catch(() => null)
+  if (!response.ok || !tokens?.access_token) return null
+  user.xAccessToken = tokens.access_token
+  if (tokens.refresh_token) user.xRefreshToken = tokens.refresh_token
+  await writeData(data)
+  return tokens.access_token
+}
 
 app.post('/api/auth/register', async (request, response) => {
   const email = String(request.body?.email || '').trim().toLowerCase()
@@ -174,10 +184,16 @@ app.post('/api/schedule', async (request, response) => {
   } catch (error) { sendError(response, 400, error.message) }
 })
 app.get('/api/x/account', async (request, response) => {
-  const token = request.user.xAccessToken
+  let token = request.user.xAccessToken
   if (!token) return sendError(response, 404, 'No X account is connected.')
-  const headers = { Authorization: `Bearer ${token}` }
-  const profileResponse = await fetch('https://api.x.com/2/users/me?user.fields=description,profile_image_url,public_metrics,username,name', { headers })
+  let headers = { Authorization: `Bearer ${token}` }
+  let profileResponse = await fetch('https://api.x.com/2/users/me?user.fields=description,profile_image_url,public_metrics,username,name', { headers })
+  if (profileResponse.status === 401) {
+    token = await refreshXAccessToken(request.user, request.appData)
+    if (!token) return sendError(response, 401, 'Your X connection has expired. Please connect X again.')
+    headers = { Authorization: `Bearer ${token}` }
+    profileResponse = await fetch('https://api.x.com/2/users/me?user.fields=description,profile_image_url,public_metrics,username,name', { headers })
+  }
   const profilePayload = await profileResponse.json()
   if (!profileResponse.ok || !profilePayload.data) return sendError(response, profileResponse.status || 502, 'Unable to load the connected X profile.')
   const profile = profilePayload.data
