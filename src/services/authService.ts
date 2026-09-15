@@ -17,6 +17,10 @@ export const authService = {
     try {
       return await request<AuthUser>('/api/auth/me')
     } catch {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.provider_token) {
+        return request<AuthUser>('/api/auth/supabase', { method: 'POST', body: JSON.stringify({ user, providerToken: session.provider_token }) })
+      }
       return { id: user.id, email: user.email || '', name: user.user_metadata?.name || 'User' }
     }
   },
@@ -32,6 +36,10 @@ export const authService = {
   },
   sendOtp: async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ email })
+    if (error) throw new Error(error.message)
+  },
+  signInWithX: async () => {
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'twitter', options: { redirectTo: window.location.origin, scopes: 'tweet.read users.read tweet.write offline.access' } })
     if (error) throw new Error(error.message)
   },
   verifyOtp: async (email: string, token: string) => {

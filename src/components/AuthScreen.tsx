@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import type { AuthUser } from '../services/authService'
 import { authService } from '../services/authService'
-import { env } from '../lib/env'
 import './auth.css'
 import './oauth.css'
 
@@ -28,7 +27,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: AuthUs
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to sign in.') }
     finally { setLoading(false) }
   }
-  const continueWithX = () => { window.location.href = `${env.apiUrl}/api/auth/x/start` }
+  const continueWithX = async () => { setError(''); setLoading(true); try { await authService.signInWithX() } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Unable to connect X.') } finally { setLoading(false) } }
   
   const heading = mode === 'login' ? 'Sign in to your workspace.' : mode === 'register' ? 'Create your workspace.' : mode === 'otp-verify' ? 'Check your email' : 'Sign in via Email OTP';
   const eyebrow = mode === 'login' ? 'WELCOME BACK' : mode === 'register' ? 'START BUILDING' : 'SECURE LOGIN';

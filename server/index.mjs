@@ -98,6 +98,25 @@ app.post('/api/auth/logout', async (request, response) => {
   response.setHeader('Set-Cookie', 'allaboutx_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0')
   response.status(204).end()
 })
+app.post('/api/auth/supabase', async (request, response) => {
+  const providerToken = String(request.body?.providerToken || '')
+  const supabaseUser = request.body?.user
+  if (!providerToken || !supabaseUser?.id) return sendError(response, 400, 'Supabase X session is incomplete.')
+  const profileResponse = await fetch('https://api.x.com/2/users/me?user.fields=profile_image_url,username,name', { headers: { Authorization: `Bearer ${providerToken}` } })
+  const profilePayload = await profileResponse.json().catch(() => null)
+  if (!profileResponse.ok || !profilePayload?.data) return sendError(response, 401, 'Unable to verify the X session from Supabase.')
+  const profile = profilePayload.data
+  const data = await readData()
+  let user = data.users.find(item => item.supabaseUserId === supabaseUser.id || item.xUserId === profile.id)
+  if (!user) { user = { id: randomUUID(), email: supabaseUser.email || `${profile.username}@x.local`, name: profile.name, passwordHash: '', supabaseUserId: supabaseUser.id, xUserId: profile.id, xUsername: profile.username, profileImageUrl: profile.profile_image_url || null, xAccessToken: providerToken, createdAt: new Date().toISOString() }; data.users.push(user) } else { user.supabaseUserId = supabaseUser.id; user.email = supabaseUser.email || user.email; user.name = profile.name; user.xUserId = profile.id; user.xUsername = profile.username; user.profileImageUrl = profile.profile_image_url || null; user.xAccessToken = providerToken }
+  if (!data.workspace.ownerId) data.workspace.ownerId = user.id
+  const sessionToken = randomBytes(32).toString('hex')
+  data.sessions = data.sessions.filter(item => item.userId !== user.id)
+  data.sessions.push({ token: sessionToken, userId: user.id, expiresAt: new Date(Date.now() + 604800000).toISOString() })
+  await writeData(data)
+  response.setHeader('Set-Cookie', sessionCookie(sessionToken))
+  response.json({ id: user.id, email: user.email, name: user.name, xUsername: user.xUsername, profileImageUrl: user.profileImageUrl || null })
+})
 app.get('/api/auth/x/start', async (_request, response) => {
   const clientId = process.env.X_CLIENT_ID
   if (!clientId) return sendError(response, 503, 'X_CLIENT_ID is not configured on the backend.')
