@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server/index.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.1",
     "@vitejs/plugin-react": "latest",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "react": "latest",
     "react-dom": "latest",
     "react-router-dom": "latest",
