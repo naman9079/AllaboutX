@@ -25,22 +25,43 @@ export const authService = {
     }
   },
   login: async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(error.message)
-    return request<AuthUser>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+    try {
+      return await request<AuthUser>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+    } catch {
+      return { id: data.user.id, email: data.user.email || '', name: data.user.user_metadata?.name || 'User' }
+    }
   },
   register: async (name: string, email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name } } })
     if (error) throw new Error(error.message)
-    return request<AuthUser>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) })
+    try {
+      return await request<AuthUser>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) })
+    } catch {
+      return { id: data.user?.id || '', email: data.user?.email || '', name }
+    }
   },
-  sendOtp: async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ email })
+  sendMagicLink: async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ 
+      email, 
+      options: { emailRedirectTo: window.location.origin } 
+    })
     if (error) throw new Error(error.message)
   },
   signInWithX: async () => {
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'twitter', options: { redirectTo: window.location.origin, scopes: 'tweet.read users.read tweet.write offline.access' } })
     if (error) throw new Error(error.message)
+  },
+  connectX: async () => {
+    const { data, error } = await supabase.auth.linkIdentity({ provider: 'twitter', options: { redirectTo: window.location.origin } })
+    if (error) {
+      console.error('linkIdentity error:', error)
+      throw new Error(error.message)
+    }
+    if (data?.url) {
+      window.location.href = data.url
+    }
   },
   verifyOtp: async (email: string, token: string) => {
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
